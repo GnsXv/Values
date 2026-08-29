@@ -1,0 +1,12 @@
+return {
+    ["America"] = 7,
+    ["Blood"] = 8,
+    ["Cowboy"] = 4,
+    ["Ghost"] = 8,
+    ["Golden"] = 4,
+    ["Laser"] = 8,
+    ["Phaser"] = 5,
+    ["Prince"] = 6,
+    ["Shadow"] = 6,
+    ["Splitter"] = 3,
+}
