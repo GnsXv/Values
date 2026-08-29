@@ -1,0 +1,15 @@
+return {
+    ["Batwing"] = 42,
+    ["Celestial"] = 2450,
+    ["Elderwood Scythe"] = 38,
+    ["Gingerscope"] = 17750,
+    ["Hallowscythe"] = 30,
+    ["Harvester"] = 250,
+    ["Icebreaker"] = 65,
+    ["Icepiercer"] = 160,
+    ["Icewing"] = 13,
+    ["Logchopper"] = 18,
+    ["Swirly Axe"] = 38,
+    ["Traveler's Axe"] = 8100,
+    ["Vampire's Axe"] = 1600,
+}
