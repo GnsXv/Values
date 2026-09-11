@@ -1,5 +1,5 @@
 return {
-    ["Alienbeam"] = 2600,
+    ["Melon"] = 2600,
     ["Amerilaser"] = 22,
     ["Australis"] = 140,
     ["Bat"] = 120,
